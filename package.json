@@ -1,0 +1,17 @@
+{
+  "name": "com.openugd.upm-http-transport",
+  "displayName": "HTTP Transport",
+  "version": "0.0.1",
+  "unity": "2020.3",
+  "author": "https://github.com/openugd",
+  "description": "require .NET 4x\n",
+  "keywords": [
+    "http",
+    "transport"
+  ],
+  "dependencies": {
+    "com.openugd.lifetime": "1.1.0",
+    "com.openugd.signal": "1.0.0"
+  },
+  "category": "Unity"
+}
