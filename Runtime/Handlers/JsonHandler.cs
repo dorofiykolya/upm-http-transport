@@ -10,10 +10,12 @@ namespace HttpTransport.Handlers
 {
     public class JsonHandler : IHandler
     {
-        public static readonly JsonSerializerSettings JsonSerializerSettings = new JsonSerializerSettings
+        public readonly JsonSerializerSettings JsonSerializerSettings = new JsonSerializerSettings();
+
+        public JsonHandler(Action<JsonSerializerSettings> settings = null)
         {
-            TypeNameHandling = TypeNameHandling.Auto
-        };
+            settings?.Invoke(JsonSerializerSettings);
+        }
 
         public Task<Request> OnRequest(Request value)
         {
@@ -31,7 +33,6 @@ namespace HttpTransport.Handlers
             if (value.ResponseCode != 0)
             {
                 var json = value.Data != null ? Encoding.UTF8.GetString(value.Data) : null;
-                JsonSerializerSettings.SerializationBinder = new StrippedTypeSerializationBinder(value.ResponseType.Assembly);
                 if (json == null)
                 {
                     value.Content = null;

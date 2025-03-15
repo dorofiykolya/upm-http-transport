@@ -44,12 +44,12 @@ namespace HttpTransport.Transports
 
                     if (ResponseCode == 200)
                     {
-                        return JsonConvert.DeserializeObject(json, ResponseType, JsonHandler.JsonSerializerSettings);
+                        return JsonConvert.DeserializeObject(json, ResponseType);
                     }
 
                     if (ResponseCode == 400)
                     {
-                        var detail = JsonConvert.DeserializeObject<ErrorResponse>(json, JsonHandler.JsonSerializerSettings);
+                        var detail = JsonConvert.DeserializeObject<ErrorResponse>(json);
                         return detail.Code;
                     }
                 }
