@@ -1,4 +1,6 @@
 ﻿using System;
+using System.Collections.Generic;
+using System.Net;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
@@ -10,20 +12,52 @@ namespace HttpTransport.Handlers
 {
     public class JsonHandler : IHandler
     {
-        public readonly JsonSerializerSettings JsonSerializerSettings = new JsonSerializerSettings();
+        public delegate void ErrorHandler(Response response);
 
-        public JsonHandler(Action<JsonSerializerSettings> settings = null)
+        public class Options
         {
-            settings?.Invoke(JsonSerializerSettings);
+            public readonly HashSet<HttpStatusCode> Success = new HashSet<HttpStatusCode>()
+            {
+                HttpStatusCode.OK,
+                HttpStatusCode.Created,
+                HttpStatusCode.Accepted
+            };
+
+            public readonly List<ErrorHandler> ErrorHandlers = new List<ErrorHandler>();
+        }
+
+        private readonly Options _options = new Options();
+        private readonly JsonSerializerSettings _jsonSerializerSettings = new JsonSerializerSettings();
+
+        public JsonHandler(Action<JsonSerializerSettings> settings = null, Action<Options> options = null)
+        {
+            _options.ErrorHandlers.Add((response) =>
+            {
+                string json = null;
+                try
+                {
+                    json = response.Data != null ? Encoding.UTF8.GetString(response.Data) : null;
+                    if (json != null)
+                    {
+                        var detail = JsonConvert.DeserializeObject<ErrorResponse>(json, _jsonSerializerSettings);
+                        response.ErrorCode = detail?.Code ?? 0;
+                    }
+                }
+                catch (Exception)
+                {
+                    response.Content = json;
+                    response.ErrorCode = 0;
+                }
+            });
+
+            settings?.Invoke(_jsonSerializerSettings);
+            options?.Invoke(_options);
         }
 
         public Task<Request> OnRequest(Request value)
         {
-            //if (!(value.Content is byte[]))
-            {
-                var json = JsonConvert.SerializeObject(value.Content, JsonSerializerSettings);
-                value.Content = Encoding.UTF8.GetBytes(json);
-            }
+            var json = JsonConvert.SerializeObject(value.Content, _jsonSerializerSettings);
+            value.Content = Encoding.UTF8.GetBytes(json);
 
             return Task.FromResult(value);
         }
@@ -37,26 +71,16 @@ namespace HttpTransport.Handlers
                 {
                     value.Content = null;
                 }
-                else if (value.ResponseCode == 200)
+                else if (_options.Success.Contains((HttpStatusCode)value.ResponseCode))
                 {
-                    value.Content = JsonConvert.DeserializeObject(json, value.ResponseType, JsonSerializerSettings);
-                }
-                else if (value.ResponseCode == 400)
-                {
-                    try
-                    {
-                        var detail = JsonConvert.DeserializeObject<ErrorResponse>(json, JsonSerializerSettings);
-                        value.ErrorCode = detail?.Code ?? 0;
-                    }
-                    catch (Exception)
-                    {
-                        value.Content = json;
-                        value.ErrorCode = 0;
-                    }
+                    value.Content = JsonConvert.DeserializeObject(json, value.ResponseType, _jsonSerializerSettings);
                 }
                 else
                 {
-                    value.ErrorCode = 0;
+                    foreach (var handler in _options.ErrorHandlers)
+                    {
+                        handler(value);
+                    }
                 }
             }
 
@@ -79,8 +103,11 @@ namespace HttpTransport.Handlers
         }
     }
 
+    [Serializable]
     public class ErrorResponse
     {
-        public long Code { get; set; }
+        [JsonProperty("code")] public long Code;
+        [JsonProperty("name")] public string Name;
+        [JsonProperty("description")] public string Description;
     }
 }

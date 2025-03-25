@@ -1,5 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Linq;
+using System.Net;
 using System.Text;
 using HttpTransport.Handlers;
 using Newtonsoft.Json;
@@ -20,8 +22,14 @@ namespace HttpTransport.Transports
         public bool IsNetworkError { get; set; }
         public bool IsFail => ResponseCode == 0 && IsNetworkError == false;
 
-        public Response(Request request, Dictionary<string, string> responseHeaders, byte[] data, long responseCode,
-                bool isNetworkError, string detail = default)
+        public Response(
+            Request request,
+            Dictionary<string, string> responseHeaders,
+            byte[] data,
+            long responseCode,
+            bool isNetworkError,
+            string detail = null
+        )
         {
             Request = request;
             ResponseHeaders = responseHeaders;
@@ -41,35 +49,51 @@ namespace HttpTransport.Transports
                 try
                 {
                     var json = Encoding.UTF8.GetString(Data);
-
-                    if (ResponseCode == 200)
+                    var code = (HttpStatusCode)ResponseCode;
+                    try
                     {
-                        return JsonConvert.DeserializeObject(json, ResponseType);
-                    }
+                        if (new[] { HttpStatusCode.OK, HttpStatusCode.Accepted, HttpStatusCode.Created }.Contains(code))
+                        {
+                            return JsonConvert.DeserializeObject(json, ResponseType);
+                        }
 
-                    if (ResponseCode == 400)
+                        return JsonConvert.DeserializeObject<ErrorResponse>(json);
+                    }
+                    catch (Exception e)
                     {
                         var detail = JsonConvert.DeserializeObject<ErrorResponse>(json);
-                        return detail.Code;
+                        return detail;
                     }
                 }
                 catch (Exception e)
                 {
                     return e;
                 }
-
-                return null;
             }
         }
 
         public static Response Fail(Request request)
         {
-            return new Response(request, new Dictionary<string, string>(), new byte[0], 0, false, "fail");
+            return new Response(
+                request,
+                new Dictionary<string, string>(),
+                new byte[0],
+                0,
+                false,
+                "fail"
+            );
         }
 
         public static Response From(Request request, Response response)
         {
-            return new Response(request, response.ResponseHeaders, response.Data, (long)response.ResponseCode, response.IsNetworkError, null);
+            return new Response(
+                request,
+                response.ResponseHeaders,
+                response.Data,
+                response.ResponseCode,
+                response.IsNetworkError,
+                null
+            );
         }
     }
 }
