@@ -21,6 +21,7 @@ namespace HttpTransport.Transports
         public long ErrorCode { get; set; }
         public bool IsNetworkError { get; set; }
         public bool IsFail => ResponseCode == 0 && IsNetworkError == false;
+        public string Details { get; }
 
         public Response(
             Request request,
@@ -36,6 +37,7 @@ namespace HttpTransport.Transports
             Data = data;
             ResponseCode = responseCode;
             IsNetworkError = isNetworkError;
+            Details = detail;
             if (IsNetworkError)
             {
                 ErrorCode = 0;
@@ -92,7 +94,7 @@ namespace HttpTransport.Transports
                 response.Data,
                 response.ResponseCode,
                 response.IsNetworkError,
-                null
+                response.Details
             );
         }
     }

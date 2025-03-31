@@ -30,6 +30,7 @@ namespace HttpTransport.Channels
         private Packet _currentPacket;
         private bool _isSending;
         private bool _abortCurrent;
+        private readonly bool _supressLostPacketTillDelivered;
 
         public WebRemoteChannel(Lifetime lifetime, string uri)
         {
@@ -39,6 +40,12 @@ namespace HttpTransport.Channels
 
             Uri = uri;
             _lifetime = lifetime;
+
+            _supressLostPacketTillDelivered = false;
+
+#if SUPPRESS_LOST_PACKET_TILL_DELIVERED
+            _supressLostPacketTillDelivered = true;
+#endif
 
             lifetime.AddAction(Dispose);
         }
@@ -132,49 +139,50 @@ namespace HttpTransport.Channels
 
                     _currentPacket.Failed = true;
                     _onSendFailure.Fire(_currentPacket);
-#if SUPPRESS_LOST_PACKET_TILL_DELIVERED
-                    if (_abortCurrent || _currentPacket.FailCount >= RetryCount)
-                    {
-                        /*
-                        _currentPacket.Response.SetResult(new Response(_currentPacket.Request,
-                                                                       request.webRequest.GetResponseHeaders(),
-                                                                       request.webRequest.downloadHandler.data,
-                                                                       (long)Shared.Protocol.Api.ResponseStatusCode.GatewayTimeout,
-                                                                       true,
-                                                                       webRequest.error));
-                        */
-                        //ClearCurrent();
-                        _isSending = false;
-                        webRequest.Dispose();
-                        //SendNext();
-                    }
-                    else
-                    {
-                        _isSending = false;
-                        webRequest.Dispose();
-                    }
 
-                    return;
-#endif
+                    if (_supressLostPacketTillDelivered)
+                    {
+                        if (_abortCurrent || _currentPacket.FailCount >= RetryCount)
+                        {
+                            _isSending = false;
+                            webRequest.Dispose();
+                        }
+                        else
+                        {
+                            _isSending = false;
+                            webRequest.Dispose();
+                        }
+
+                        return;
+                    }
                 }
 
-                //todo:resolve multiple callbacks!
                 string detail = isNetworkError
-                        ? webRequest.error
-                        : request.webRequest.downloadHandler.text;
+                    ? webRequest.error
+                    : null;
                 var headers = request.webRequest.GetResponseHeaders();
                 var data = request.webRequest.downloadHandler.data;
                 var responseCode = request.webRequest.responseCode;
 
-                _currentPacket.Response.SetResult(new Response(_currentPacket.Request,
-                        headers, data, responseCode,
-                        isNetworkError, detail));
+                _currentPacket.Response.SetResult(
+                    new Response(
+                        _currentPacket.Request,
+                        headers,
+                        data,
+                        responseCode,
+                        isNetworkError,
+                        detail
+                    )
+                );
                 _onResponse.Fire(_currentPacket);
 
                 webRequest.Dispose();
                 _isSending = false;
+
                 if (!isNetworkError)
+                {
                     SendNext();
+                }
             };
         }
 
@@ -184,9 +192,20 @@ namespace HttpTransport.Channels
             {
                 return BuildPostRequest(packet);
             }
+
             if (packet.Request.Method == HttpMethod.Get)
             {
                 return BuildGetRequest(packet);
+            }
+
+            if (packet.Request.Method == HttpMethod.Put)
+            {
+                return BuildPutRequest(packet);
+            }
+
+            if (packet.Request.Method == HttpMethod.Delete)
+            {
+                return BuildDeleteRequest(packet);
             }
 
             return null;
@@ -214,6 +233,30 @@ namespace HttpTransport.Channels
             }
 
             webRequest.uploadHandler = new UploadHandlerRaw((byte[])packet.Request.Content);
+            return webRequest;
+        }
+
+        private UnityWebRequest BuildPutRequest(Packet packet)
+        {
+            var webRequest = UnityWebRequest.Put($"{Uri}{packet.Request.Uri}", (byte[])packet.Request.Content);
+            webRequest.timeout = TimeoutSeconds;
+            foreach (var pair in packet.Request.Headers)
+            {
+                webRequest.SetRequestHeader(pair.Key, pair.Value);
+            }
+
+            return webRequest;
+        }
+
+        private UnityWebRequest BuildDeleteRequest(Packet packet)
+        {
+            var webRequest = UnityWebRequest.Delete($"{Uri}{packet.Request.Uri}");
+            webRequest.timeout = TimeoutSeconds;
+            foreach (var pair in packet.Request.Headers)
+            {
+                webRequest.SetRequestHeader(pair.Key, pair.Value);
+            }
+
             return webRequest;
         }
 

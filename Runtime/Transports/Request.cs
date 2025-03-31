@@ -17,8 +17,16 @@ namespace HttpTransport.Transports
         public RequestFlags Flags { get; }
         public HttpMethod Method { get; }
 
-        public Request(int requestId, string uri, Type requestType, Type responseType, object requestObject,
-                AsyncResponse response, RequestFlags flags, HttpMethod method)
+        public Request(
+            int requestId,
+            string uri,
+            Type requestType,
+            Type responseType,
+            object requestObject,
+            AsyncResponse response,
+            RequestFlags flags,
+            HttpMethod method
+        )
         {
             RequestId = requestId;
             RequestObject = requestObject;

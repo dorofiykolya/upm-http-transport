@@ -25,9 +25,18 @@ namespace HttpTransport.Channels
         {
             if (DisableConnection)
             {
-                return Task.FromResult(new Response(request, new Dictionary<string, string>(), null, 0, true,
-                        "connection disabled"));
+                return Task.FromResult(
+                    new Response(
+                        request,
+                        new Dictionary<string, string>(),
+                        null,
+                        0,
+                        true,
+                        "connection disabled"
+                    )
+                );
             }
+
             return _channel.Send(request);
         }
     }
